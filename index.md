@@ -1,5 +1,6 @@
 ---
-layout: default
+title: Spencer Rice
+description: W&M CTBA
 ---
 
 Text can be **bold**, _italic_, ~~strikethrough~~ or `keyword`.

@@ -8,3 +8,5 @@ description: W&M CTBA
 This is my time series assignment:
 
 -[Time Series Graph](/TimeSeries/index.md)
+
+-[link to sample repository](https://github.com/srrice/CTBA)

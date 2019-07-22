@@ -3,6 +3,8 @@ title: Spencer Rice
 description: W&M CTBA
 ---
 
+![Photo](/pics/sample)
+
 This is my time series assignment:
 
 -[Time Series Graph](/TimeSeries/index.md)

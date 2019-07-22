@@ -5,4 +5,4 @@ description: W&M CTBA
 
 This is my time series assignment:
 
--[Time Series Graph](/timeSeries/index.md)
+-[Time Series Graph](/TimeSeries/index.md)

@@ -1,5 +1,5 @@
 ---
-Title: Time Series Decomposition
+Title: Time Series Graph
 description: time series assignment
 ---
 this is my completed assignment

@@ -1,0 +1,256 @@
+---
+title: "M7 Insurance Notebook"
+output: html_notebook
+---
+
+```{r}
+# remove warning messages
+knitr::opts_chunk$set(warning = F, message = F, options(scipen = 999))
+options(warn = -1)
+
+# import packages
+library(ggplot2) # For graphical tools
+library(MASS) # For some advanced statistics
+library(pscl) # For "counting" models (e.g., Poisson and Negative Binomial)
+library(tidyverse)# For general needs and functions
+library(DMwR)
+library(readr)
+library(corrplot)
+library(tree)
+library(randomForest)
+library(gbm)
+```
+
+```{r}
+# Read File in from working directory
+setwd('C:/Users/Spencer/Documents/Machine Learning/insurance_dataset')
+train <- read_csv("m7-insurance-training.csv", col_names = T)  # read csv file
+test <- read_csv('m7-insurance-test.csv', col_names = T)
+
+# Removing index for analysis
+train <- train[,-1]
+test <- test[,-1]
+```
+# User Defined Functions
+```{r}
+# function to truncate outliers to 5th and 95th percentile
+outliers <- function(x) {
+  qnt <- quantile(x, probs=c(.05, .95), na.rm = T)
+  y <- 1.5 * IQR(x, na.rm = T)
+  x[x < (qnt[1] - y)] <- qnt[1]
+  x[x > (qnt[2] + y)] <- qnt[2]
+  return(x)
+}
+
+# function to replace missing values
+missing <- function(x){
+  x[is.na(x)] <- median(x, na.rm = T)
+  return(x)
+}
+```
+# Data Exploration
+```{r}
+# training dataset
+str(train)
+summary(train)
+
+# Test Dataset
+str(test)
+summary(test)
+```
+# Data Preparation
+## Training Dataset
+```{r}
+# adjusting the structure of the dataset
+
+# replacing unrealistic values with the median car age
+train$CAR_AGE <- if_else(train$CAR_AGE < 0, median(train$CAR_AGE), train$CAR_AGE)
+
+# Removing non-numeric symbols from numeric data, such as "$"
+train$INCOME <- as.numeric(gsub("[^0-9.]", "", train$INCOME))
+train$HOME_VAL <- as.numeric(gsub("[^0-9.]", "", train$HOME_VAL))
+train$BLUEBOOK <- as.numeric(gsub("[^0-9.]", "", train$BLUEBOOK))
+train$OLDCLAIM <- as.numeric(gsub("[^0-9.]", "", train$OLDCLAIM))
+
+# converting categorical data to factors
+train$TARGET_FLAG <- as.factor(train$TARGET_FLAG)
+train$SEX <- as.factor(train$SEX)
+train$EDUCATION <- as.factor(train$EDUCATION)
+train$PARENT1 <- as.factor(train$PARENT1)
+train$MSTATUS <- as.factor(train$MSTATUS)
+train$REVOKED <- as.factor(train$REVOKED)
+train$RED_CAR <- as.factor(if_else(train$RED_CAR=="yes", 1, 0))
+
+#train$RED_CAR <- as.factor(train$RED_CAR)
+train$URBANICITY <- ifelse(train$URBANICITY == "Highly Urban/ Urban", "Urban", "Rural")
+train$URBANICITY <- as.factor(train$URBANICITY)
+train$JOB <- as.factor(train$JOB)
+train$CAR_USE <- as.factor(train$CAR_USE)
+train$CAR_TYPE <- as.factor(train$CAR_TYPE)
+train$DO_KIDS_DRIVE <- as.factor(ifelse(train$KIDSDRIV > 0, 1, 0))
+
+str(train)
+```
+
+```{r}
+# replacing missing values with median value of the variable
+train$AGE <- missing(train$AGE)
+train$YOJ <- missing(train$YOJ)
+train$INCOME <- missing(train$INCOME)
+train$HOME_VAL <- missing(train$HOME_VAL)
+train$CAR_AGE <- missing(train$CAR_AGE)
+
+# replace missing factors with "NA", making it an additional level
+train$JOB <- addNA(train$JOB)
+
+# adjusing outliers to the 5th and 95th percentile
+train$AGE <- outliers(train$AGE)
+train$HOMEKIDS <- outliers(train$HOMEKIDS)
+train$YOJ <- outliers(train$YOJ)
+train$INCOME <- outliers(train$INCOME)
+train$HOME_VAL <- outliers(train$HOME_VAL)
+train$TRAVTIME <- outliers(train$TRAVTIME)
+train$BLUEBOOK <- outliers(train$BLUEBOOK)
+train$TIF <- outliers(train$TIF)
+train$OLDCLAIM <- outliers(train$OLDCLAIM)
+train$CLM_FREQ <- outliers(train$CLM_FREQ)
+train$MVR_PTS <- outliers(train$MVR_PTS)
+train$CAR_AGE <- outliers(train$CAR_AGE)
+
+summary(train)
+```
+## Test Dataset
+```{r}
+# Removing non-numeric symbols from numeric data, such as "$"
+test$INCOME <- as.numeric(gsub("[^0-9.]", "", test$INCOME))
+test$HOME_VAL <- as.numeric(gsub("[^0-9.]", "", test$HOME_VAL))
+test$BLUEBOOK <- as.numeric(gsub("[^0-9.]", "", test$BLUEBOOK))
+test$OLDCLAIM <- as.numeric(gsub("[^0-9.]", "", test$OLDCLAIM))
+test$TARGET_AMT <- as.numeric(test$TARGET_AMT)
+
+
+# converting categorical data to factors
+test$TARGET_FLAG <- as.factor(test$TARGET_FLAG)
+test$SEX <- as.factor(test$SEX)
+test$EDUCATION <- as.factor(test$EDUCATION)
+test$PARENT1 <- as.factor(test$PARENT1)
+test$MSTATUS <- as.factor(test$MSTATUS)
+test$REVOKED <- as.factor(test$REVOKED)
+test$RED_CAR <- as.factor(if_else(test$RED_CAR=="yes", 1, 0))
+#train$RED_CAR <- as.factor(train$RED_CAR)
+test$URBANICITY <- ifelse(test$URBANICITY == "Highly Urban/ Urban", "Urban", "Rural")
+test$URBANICITY <- as.factor(test$URBANICITY)
+test$JOB <- as.factor(test$JOB)
+test$CAR_USE <- as.factor(test$CAR_USE)
+test$CAR_TYPE <- as.factor(test$CAR_TYPE)
+test$DO_KIDS_DRIVE <- as.factor(ifelse(test$KIDSDRIV > 0, 1, 0))
+
+# adding NA as a level for factored variables
+test$JOB <- addNA(test$JOB)
+
+# Replacing missing values
+#test <- test %>%
+#  fill(-c(AGE, YOJ, INCOME, HOME_VAL, CAR_AGE), .direction = 'updown')
+
+# replacing missing values with median value from the training dataset 
+test$AGE[is.na(test$AGE)] = median(train$AGE, na.rm = T)
+test$YOJ[is.na(test$YOJ)] = median(train$YOJ, na.rm = T)
+test$INCOME[is.na(test$INCOME)] = median(train$INCOME, na.rm = T)
+test$HOME_VAL[is.na(test$HOME_VAL)] = median(train$HOME_VAL, na.rm = T)
+test$CAR_AGE[is.na(test$CAR_AGE)] = median(train$CAR_AGE, na.rm = T)
+
+str(test)
+summary(test)
+```
+
+
+# Model Development
+## Classification Tree Development
+```{r}
+class_tree <- tree(TARGET_FLAG~.-TARGET_AMT, data = train)
+summary(class_tree)
+
+# tree using cross validation error rates
+cv_class <- cv.tree(class_tree, FUN = prune.misclass)
+prune_class <- prune.misclass(class_tree, best = 6)
+
+#plot(prune_class)
+#Atext(prune_class, pretty = 0)
+
+# Boosting
+boost_class <- gbm(TARGET_FLAG~.-TARGET_AMT, data = train, n.trees = 500, distribution = "bernoulli", interaction.depth = 6)
+boost_predict <- predict(boost_class, n.trees = 500, type = 'response')
+
+# Bagging
+bag_class <- randomForest(TARGET_FLAG~.-TARGET_AMT, data = train, importance = T, mtry = 24)
+
+# Random Forests
+forest_class<- randomForest(TARGET_FLAG~.-TARGET_AMT, data = train, importance = T)
+
+bag_class
+forest_class
+```
+## Linear Tree Development
+```{r}
+lin_tree <- tree(TARGET_AMT~.-TARGET_FLAG, data = train)
+summary(lin_tree)
+
+# tree using cross validation error rates
+cv_lin <- cv.tree(lin_tree)
+cv_lin
+prune_lin <- prune.tree(lin_tree, best = 2)
+
+#plot(prune_lin)
+#text(prune_lin, pretty = 0)
+
+# Boosting
+boost_lin <- gbm(TARGET_AMT~.-TARGET_FLAG, data = train, n.trees = 500, distribution = "gaussian", interaction.depth = 6)
+boost_lin.predict <- predict(boost_lin, n.trees = 500, type = 'response')
+
+# Bagging
+#bag_lin <- randomForest(TARGET_AMT~.-TARGET_FLAG, data = train, importance = T, mtry = 24)
+#bag_lin
+
+# Random Forests
+forest_lin <- randomForest(TARGET_AMT~.-TARGET_FLAG, data = train, importance = T)
+forest_lin.predict <- predict(forest_lin, n.trees = 500, type = 'response')
+forest_lin
+```
+
+Model Selection
+```{r}
+# ensuring that factor variables in the test data are equal to those in the training set (Kept getting an error without it)
+levels(test$TARGET_FLAG) <- levels(train$TARGET_FLAG)
+levels(test$PARENT1) <- levels(train$PARENT1)
+levels(test$MSTATUS) <- levels(train$MSTATUS)
+levels(test$SEX) <- levels(train$SEX)
+levels(test$EDUCATION) <- levels(train$EDUCATION)
+levels(test$JOB) <- levels(train$JOB)
+levels(test$CAR_USE) <- levels(train$CAR_USE)
+levels(test$CAR_TYPE) <- levels(train$CAR_TYPE)
+levels(test$RED_CAR) <- levels(train$RED_CAR)
+levels(test$REVOKED) <- levels(train$REVOKED)
+levels(test$URBANICITY) <- levels(train$URBANICITY)
+levels(test$DO_KIDS_DRIVE) <- levels(train$DO_KIDS_DRIVE)
+
+# applying champion model to test data
+test$P_TARGET_FLAG <- predict(forest_class, newdata = test, type = 'response')
+test$P_TARGET_AMT <- predict(boost_lin, newdata = test, n.trees = 500, type = 'response')
+
+# adding "index" back into dataframe
+test <- rowid_to_column(test, "INDEX")
+
+# saving prediction to csv file 
+prediction <- test[c("INDEX","P_TARGET_FLAG", "P_TARGET_AMT")]
+write.csv(prediction, file = "m7_score.csv")
+```
+
+#Summary
+#### Data exploration
+The first noticeable thing that appeared inaccurate was that 'car age' contained a negative value, which is unrealistic, and had to be corrected before moving forward. Regarding missing values, we had to consider why some data contained missing values. was it deliberate, or purposefully withheld to hopefully get a lower insurance premium? The only missing categorical variable was 'job.'
+
+#### Data preparation
+The training data set, and the test data set underwent the same modifications before they could be modeled. They both contained numeric and categorical data. The monetary variables had to be modified to remove the "$" sign and convert the data type to numeric. The numeric variables also contained outliers that had to be adjusted to the 5th and 95th percentile. The categorical variables had to be converted to factors in order to assign levels that can be used to create the models. additionally, the categorical [job] variable contained missing values were not replaced with another value, instead, the missing values were added as a level.
+
+#### Model Selection
+The random forest model was selected to predict if there was a car accident because it had the lowest error rate. The boost model was selected for predicting the target amount. 

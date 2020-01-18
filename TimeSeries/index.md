@@ -1,8 +1,7 @@
 ---
-Title: Time Series Graph
-description: time series assignment
+Title: Time Series
+description: time series
 ---
-this is my completed assignment
 - [Time Series graph(html)](M3Graphing.html)
 - [Time Series graph(ipynb)](M3Graphing.ipynb)
 

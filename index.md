@@ -1,12 +1,14 @@
 ---
 title: Spencer Rice
-description: W&M CTBA
+description: William & Mary's Business Analytics
 ---
 
 ![Photo](/pics/img_651.jpg)
 
-This is my time series assignment:
+Sample of programming and data analysis:
 
 -[Time Series Graph](/TimeSeries/index.md)
 
 -[link to sample repository](https://github.com/srrice/CTBA)
+
+-[Machine Learning Model for insurance dataset](/TimeSeries/index.md)
